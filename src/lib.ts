@@ -91,11 +91,11 @@ type PrQueryResponse = {
 }
 
 export async function findPR(state: State, settings: Settings, octokit: InstanceType<typeof GitHub>): Promise<State> {
-	const { repo, owner, branchName } = settings;
+	const { repo, owner, branchName } = settings
 	const openPRs: Array<PrQueryResponse> = await octokit.graphql(`
 		query findPR($owner: String!, $repo: String!, $branchName: String!) {
 			repository(owner: $owner, name: $repo) {
-				pullRequests(headRefName: $branchName, states:[OPEN]) {
+				pullRequests(headRefName: $branchName, states:[OPEN], first:1) {
 					edges {
 						node {
 							id
@@ -111,11 +111,9 @@ export async function findPR(state: State, settings: Settings, octokit: Instance
 		branchName,
 	})
 
-	console.log("Found ${openPRs.length} open PRs against ${branchName}")
-	if (openPRs.length > 0) {
-		state = {...state, prId: openPRs[0].id }
-	}
-	return state;
+	const id = (openPRs.length > 0) ? openPRs[0].id : null
+	console.log(`Query for open PRs from branch '${branchName}' returned id: ${id}`)
+	return { ...state, prId: id }
 }
 
 function updatePR(state: State, _settings: Settings): State {
