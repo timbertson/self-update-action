@@ -5,8 +5,10 @@ import { GitHub } from '@actions/github/lib/utils'
 enum StateType { Initial }
 type State = {
 	error: string | null,
+	commit: string | null,
 	hasChanges: boolean,
-	prId: string | null,
+	pullRequest: PullRequest | null,
+	repository: Repository | null,
 }
 
 type Settings = {
@@ -15,11 +17,23 @@ type Settings = {
 	repo: string,
 	updateScript: string,
 	applyUpdateScript: string | null,
-	branchName: string | null,
+	branchName: string,
+	baseBranch: string,
 	commitMessage: string,
 	prTitle: string,
 	prBody: string,
 }
+
+type PullRequest = {
+	id: string,
+	url: string,
+}
+
+type Repository = {
+	id: string,
+}
+
+type Octokit = InstanceType<typeof GitHub>
 
 async function main(settings: Settings) {
 	const octokit = github.getOctokit(settings.githubToken)
@@ -27,7 +41,7 @@ async function main(settings: Settings) {
 	let state = update(settings);
 	state = applyUpdate(state, settings);
 	state = detectChanges(state, settings);
-	if (!state.hasChanges) {
+	if (state.error == null && !state.hasChanges) {
 		console.log("No changes detected; exiting")
 		return
 	}
@@ -35,7 +49,7 @@ async function main(settings: Settings) {
 	state = pushBranch(state, settings);
 
 	state = await findPR(state, settings, octokit);
-	state = updatePR(state, settings);
+	state = await updatePR(state, settings, octokit);
 	if (state.error != null) {
 		// make sure errors are reflected in action result
 		throw new Error(state.error)
@@ -43,14 +57,16 @@ async function main(settings: Settings) {
 }
 
 function update(settings: Settings): State {
-	const state = {
+	const initialState = {
 		error: null,
 		hasChanges: false,
-		prId: null,
+		pullRequest: null,
+		commit: null,
+		repository: null,
 	}
-	return catchError(state, () => {
+	return catchError(initialState, () => {
 		sh(settings.updateScript)
-		return state
+		return initialState
 	})
 }
 
@@ -80,25 +96,41 @@ function detectChanges(state: State, _settings: Settings): State {
 
 function pushBranch(state: State, settings: Settings): State {
 	return catchError(state, () => {
-		cmd(["git", "commit", "-a", "-m", settings.commitMessage])
+		if (state.hasChanges) {
+			cmd(["git", "commit", "-a", "-m", settings.commitMessage])
+		}
+		const commit = cmd(["git", "rev-parse", "HEAD"])
 		cmd(["git", "push", "-f", "origin", "HEAD:refs/heads/"+settings.branchName])
-		return state
+		return { ...state, commit }
 	})
 }
 
 type PrQueryResponse = {
-	id: string
+	repository: {
+		id: string,
+		pullRequests: {
+			edges: Array<{
+				node: PullRequest
+			}>
+		}
+	}
 }
 
-export async function findPR(state: State, settings: Settings, octokit: InstanceType<typeof GitHub>): Promise<State> {
+export async function findPR(state: State, settings: Settings, octokit: Octokit): Promise<State> {
 	const { repo, owner, branchName } = settings
-	const openPRs: Array<PrQueryResponse> = await octokit.graphql(`
+	const response: PrQueryResponse = await octokit.graphql(`
 		query findPR($owner: String!, $repo: String!, $branchName: String!) {
 			repository(owner: $owner, name: $repo) {
-				pullRequests(headRefName: $branchName, states:[OPEN], first:1) {
+				id
+				pullRequests(
+					headRefName: $branchName,
+					states:[OPEN],
+					first:1)
+				{
 					edges {
 						node {
 							id
+							url
 						}
 					}
 				}
@@ -111,13 +143,97 @@ export async function findPR(state: State, settings: Settings, octokit: Instance
 		branchName,
 	})
 
-	const id = (openPRs.length > 0) ? openPRs[0].id : null
-	console.log(`Query for open PRs from branch '${branchName}' returned id: ${id}`)
-	return { ...state, prId: id }
+	const repository = { id: response.repository.id }
+	const openPRs = response.repository.pullRequests.edges.map((e) => e.node);
+	const pullRequest = openPRs[0] || null
+	/* console.log(`Query for open PRs from branch '${branchName}' returned: ${JSON.stringify(pullRequest)}`) */
+	return { ...state, repository, pullRequest }
 }
 
-function updatePR(state: State, _settings: Settings): State {
-	return state
+export async function updatePR(state: State, settings: Settings, octokit: Octokit): Promise<State> {
+	if (state.pullRequest == null) {
+		const pullRequest = await createPR(state, settings, octokit)
+		console.log(`Created PR ${pullRequest.url}`)
+		return {...state, pullRequest }
+	} else {
+		console.log(`Updating PR ${state.pullRequest.url}`)
+		await updatePRDescription(state.pullRequest, state, settings, octokit)
+		return state
+	}
+}
+
+async function createPR(state: State, settings: Settings, octokit: Octokit): Promise<PullRequest> {
+	if (state.repository == null) {
+		throw new Error("Repository is unset")
+	}
+	type Response = { createPullRequest: { pullRequest: PullRequest } }
+	const response: Response = await octokit.graphql(`
+		mutation updatePR(
+			$branchName: String!,
+			$baseBranch: String!,
+			$body: String!,
+			$title: String!,
+			$repoId: String!
+		) {
+			createPullRequest(input: {
+				repositoryId: $repoId,
+				baseRefName: $baseBranch,
+				headRefName: $branchName,
+				title: $title,
+				body: $body
+			}) {
+				pullRequest {
+					id
+					url
+				}
+			}
+		}
+	`,
+	{
+		repoId: state.repository.id,
+		branchName: settings.branchName,
+		baseBranch: settings.baseBranch,
+		title: settings.prTitle,
+		body: renderPRDescription(state, settings),
+	})
+	/* console.log(JSON.stringify(response)) */
+	return response.createPullRequest.pullRequest
+}
+
+export async function updatePRDescription(pullRequest: PullRequest, state: State, settings: Settings, octokit: Octokit): Promise<void> {
+	await octokit.graphql(`
+		mutation updatePR($id: String!, $body: String!) {
+			updatePullRequest(input: { pullRequestId: $id, body: $body }) {
+				pullRequest {
+					id
+				}
+			}
+		}
+	`,
+	{
+		id: pullRequest.id,
+		body: renderPRDescription(state, settings),
+	})
+}
+
+function renderPRDescription(state: State, settings: Settings): string {
+	let body = settings.prBody
+	if (state.error != null) {
+		body += "\n\n----\n\n"
+		body += [
+			"### Error:",
+			"",
+			`Applying updates failed for ${state.commit || "(unknown commit)"}:`,
+			"",
+			"```",
+			state.error,
+			"```",
+		].join("\n")
+	}
+
+	body += "\n\n"
+	body += "_**Note:** This branch is owned by a bot, and will be force-pushed next time it runs._"
+	return body
 }
 
 function catchError(state: State, fn: () => State): State {
@@ -138,7 +254,7 @@ const execOptions: child_process.ExecSyncOptionsWithStringEncoding = {
 	stdio: ['inherit', 'pipe', 'pipe']
 }
 
-function handleExec(sh: string, result: child_process.SpawnSyncReturns<string>) {
+function handleExec(sh: string, result: child_process.SpawnSyncReturns<string>): string {
 	const output = [
 		result.stdout.trim(),
 		result.stderr.trim(),
@@ -155,10 +271,10 @@ function handleExec(sh: string, result: child_process.SpawnSyncReturns<string>) 
 	return result.stdout.trim()
 }
 
-function cmd(args: string[]) {
+function cmd(args: string[]): string {
 	return handleExec(args.join(' '), child_process.spawnSync(args[0], args.slice(1), execOptions))
 }
 
-function sh(script: string) {
+function sh(script: string): string {
 	return handleExec(script, child_process.spawnSync(script, { ...execOptions, shell: true }))
 }
