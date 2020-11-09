@@ -24,6 +24,44 @@ type Settings = {
 	prBody: string,
 }
 
+export const settingKeys = [
+	'GITHUB_TOKEN',
+	'owner',
+	'repo',
+	'updateScript',
+	'applyUpdateScript',
+	'branchName',
+	'baseBranch',
+	'commitMessage',
+	'prTitle',
+	'prBody',
+]
+
+export function parseSettings(inputs: Record<string, string>): Settings {
+	function get(key: string, dfl?: string | undefined): string {
+		const value = inputs[key] || dfl
+		if (!value) {
+			throw new Error(`Missing setting: ${key}`)
+		}
+		return value
+	}
+
+	const repositoryFromEnv = (process.env['GITHUB_REPOSITORY'] || "").split('/')
+
+	return {
+		githubToken: get('GITHUB_TOKEN'),
+		owner: get('owner', repositoryFromEnv[0]),
+		repo: get('repo', repositoryFromEnv[1]),
+		updateScript: get('updateScript'),
+		applyUpdateScript: inputs['applyUpdateScript'] || null,
+		branchName: inputs['branchName'] || 'self-update',
+		baseBranch: inputs['baseBranch'] || cmd(['git', 'branch', '--show-current']),
+		commitMessage: get('commitMessage', '[bot] self-update'),
+		prTitle: get('prTitle' || '[bot] self-update'),
+		prBody: get('prBody' || 'This is an automated PR from a github action'),
+	}
+}
+
 type PullRequest = {
 	id: string,
 	url: string,
@@ -56,7 +94,7 @@ async function main(settings: Settings) {
 	}
 }
 
-function update(settings: Settings): State {
+export function update(settings: Settings): State {
 	const initialState = {
 		error: null,
 		hasChanges: false,
@@ -85,7 +123,7 @@ function applyUpdate(state: State, settings: Settings): State {
 
 function detectChanges(state: State, _settings: Settings): State {
 	try {
-		sh("git diff-index --quiet")
+		cmd(["git", "diff-index", "--quiet"])
 		return { ...state, hasChanges: false }
 	} catch(e) {
 		// it failed, presumably because there were differences.
@@ -276,5 +314,5 @@ function cmd(args: string[]): string {
 }
 
 function sh(script: string): string {
-	return handleExec(script, child_process.spawnSync(script, { ...execOptions, shell: true }))
+	return handleExec(script, child_process.spawnSync('bash', ['-euc', script], execOptions))
 }

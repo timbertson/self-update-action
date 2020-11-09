@@ -1,0 +1,61 @@
+---
+jobs:
+  build:
+    steps:
+    - uses: github/checkout@v2
+      with:
+        fetch-depth: '1'
+    - uses: timbertson/self-update-action@main
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        branchName: test-add-date
+        commitMessage: "Just adding the date..."
+        prTitle: "[test] applyUpdate"
+        prBody: "This is a test PR"
+        updateScript: |-
+          echo "Today is ${date}" > current-date
+          git add --intent-to-add current-date
+
+    - uses: timbertson/self-update-action@main
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        branchName: test-add-date-2
+        prTitle: "[test] applyUpdateScript"
+        prBody: "This is a test PR"
+        updateScript: |-
+          echo "Today is ${date}" > current-date
+          git add --intent-to-add current-date
+        applyUpdateScript: |-
+          sed -i -e 's/is .*/is [censored]/' current-date
+
+    - uses: timbertson/self-update-action@main
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        branchName: test-add-date-fail
+        prTitle: "[test] simulated error"
+        prBody: "This is a test PR"
+        updateScript: |-
+          echo "Uh oh..."
+          exit 2
+
+    - uses: timbertson/self-update-action@main
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        prTitle: "[test] unchanged"
+        branchName: test-add-date-3
+        prBody: "This is a test PR"
+        updateScript: |-
+          echo "Today is ${date}" > current-date
+          git add --intent-to-add current-date
+        applyUpdateScript: |-
+          true
+
+name: Self-update test
+'on':
+  repository_dispatch:
+    types: [test]
+  push:
+    branches:
+    # This MUST exclude all branches above
+    - main
+    - wip
