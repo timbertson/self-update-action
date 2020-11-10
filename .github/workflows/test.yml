@@ -66,6 +66,6 @@ on:
     branches:
      - wip
   schedule:
-    - cron: "*/5 * * * *" # every 5m
-    # - cron: "0 0 * * 0" # every sunday
+    # - cron: "*/5 * * * *" # every 5m
+    - cron: "0 0 * * 0" # every sunday
     # - cron: "0 2 * * *" # every day at 2am
