@@ -8,7 +8,27 @@ This is the opposite tool: it has no knowledge of your tooling, so you'll have t
 
 ## Sample use case:
 
-TODO document cron...
+There's some test workflows in [.github/workflows/test.yml](https://github.com/timbertson/self-update-action/blob/main/.github/workflows/test.yml), which create pull requests like [this one](https://github.com/timbertson/self-update-action/pull/6).
+
+A common use case is periodically attempting to update, this will run an update script every day and submit a PR if it results in a diff:
+
+
+```yml
+name: Self-update
+on:
+  schedule:
+    - cron: "0 2 * * *" # every day at 2am
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: timbertson/self-update-action@v1
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        updateScript: "./update.sh"
+```
+
 
 ## Workflow:
 
