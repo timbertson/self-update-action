@@ -61,9 +61,9 @@ jobs:
           exit 2
 
 name: Self-update test
-'on':
-  repository_dispatch:
-    types: [test]
+on:
   push:
     branches:
-    - wip
+     - wip
+  schedule:
+    - cron: "*/30 * * * *"
