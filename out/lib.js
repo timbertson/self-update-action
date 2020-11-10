@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePRDescription = exports.updatePR = exports.findPR = exports.update = exports.parseSettings = exports.settingKeys = void 0;
+exports.updatePRDescription = exports.updatePR = exports.findPR = exports.main = exports.parseSettings = exports.settingKeys = void 0;
 const child_process = require("child_process");
 const github = require("@actions/github");
 var StateType;
@@ -27,12 +27,16 @@ exports.settingKeys = [
     'commitMessage',
     'prTitle',
     'prBody',
+    'authorName',
+    'authorEmail',
 ];
 function parseSettings(inputs) {
     function get(key, dfl) {
-        const value = inputs[key] || dfl;
+        return assertDefined(key, inputs[key] || dfl);
+    }
+    function assertDefined(msg, value) {
         if (!value) {
-            throw new Error(`Missing setting: ${key}`);
+            throw new Error(`Missing setting: ${msg}`);
         }
         return value;
     }
@@ -43,61 +47,79 @@ function parseSettings(inputs) {
         repo: get('repo', repositoryFromEnv[1]),
         updateScript: get('updateScript'),
         applyUpdateScript: inputs['applyUpdateScript'] || null,
-        branchName: inputs['branchName'] || 'self-update',
-        baseBranch: inputs['baseBranch'] || cmd(['git', 'branch', '--show-current']),
+        baseBranch: inputs['baseBranch'] || null,
+        branchName: get('branchName', 'self-update'),
         commitMessage: get('commitMessage', '[bot] self-update'),
-        prTitle: get('prTitle' || '[bot] self-update'),
-        prBody: get('prBody' || 'This is an automated PR from a github action'),
+        prTitle: get('prTitle', '[bot] self-update'),
+        prBody: get('prBody', 'This is an automated PR from a github action'),
+        authorName: get('authorName', 'github-actions'),
+        authorEmail: get('authorEmail', '41898282+github-actions[bot]@users.noreply.github.com'),
+        runId: assertDefined('GITHUB_RUN_ID', process.env['GITHUB_RUN_ID']),
     };
 }
 exports.parseSettings = parseSettings;
 function main(settings) {
     return __awaiter(this, void 0, void 0, function* () {
         const octokit = github.getOctokit(settings.githubToken);
-        let state = update(settings);
+        let state = initialState();
+        addLog(state, "Running update script ...");
+        state = initEnv(state, settings);
+        state = update(state, settings);
         state = applyUpdate(state, settings);
         state = detectChanges(state, settings);
-        if (state.error == null && !state.hasChanges) {
+        if (!(state.hasError || state.hasChanges)) {
             console.log("No changes detected; exiting");
             return;
         }
         state = pushBranch(state, settings);
         state = yield findPR(state, settings, octokit);
         state = yield updatePR(state, settings, octokit);
-        if (state.error != null) {
+        if (state.hasError) {
             // make sure errors are reflected in action result
-            throw new Error(state.error);
+            process.exit(1);
         }
     });
 }
-function update(settings) {
-    const initialState = {
-        error: null,
+exports.main = main;
+function initialState() {
+    return {
+        log: [],
+        hasError: false,
         hasChanges: false,
         pullRequest: null,
         commit: null,
         repository: null,
     };
-    return catchError(initialState, () => {
-        sh(settings.updateScript);
-        return initialState;
+}
+function initEnv(state, settings) {
+    ;
+    ['AUTHOR', 'COMMITTER'].forEach((role) => {
+        process.env[`GIT_${role}_NAME`] = settings.authorName;
+        process.env[`GIT_${role}_EMAIL`] = settings.authorEmail;
+    });
+    return state;
+}
+function update(state, settings) {
+    return catchError(state, () => {
+        sh(state, settings.updateScript);
+        return state;
     });
 }
-exports.update = update;
 function applyUpdate(state, settings) {
-    if (settings.applyUpdateScript == null || state.error != null) {
+    if (settings.applyUpdateScript == null || state.hasError) {
         return state;
     }
+    console.log("Applying update ...");
     const applyUpdateScript = settings.applyUpdateScript;
     return catchError(state, () => {
-        cmd(["git", "add", "-u"]); // TODO what if no changes?
-        sh(applyUpdateScript);
+        cmd(state, ["git", "add", "-u"]); // TODO what if no changes?
+        sh(state, applyUpdateScript);
         return state;
     });
 }
 function detectChanges(state, _settings) {
     try {
-        cmd(["git", "diff-index", "--quiet"]);
+        cmd(state, ["git", "diff-files", "--quiet"]);
         return Object.assign(Object.assign({}, state), { hasChanges: false });
     }
     catch (e) {
@@ -109,10 +131,10 @@ function detectChanges(state, _settings) {
 function pushBranch(state, settings) {
     return catchError(state, () => {
         if (state.hasChanges) {
-            cmd(["git", "commit", "-a", "-m", settings.commitMessage]);
+            cmd(state, ["git", "commit", "-a", "-m", settings.commitMessage]);
         }
-        const commit = cmd(["git", "rev-parse", "HEAD"]);
-        cmd(["git", "push", "-f", "origin", "HEAD:refs/heads/" + settings.branchName]);
+        const commit = cmd(state, ["git", "rev-parse", "HEAD"]);
+        cmd(state, ["git", "push", "-f", "origin", "HEAD:refs/heads/" + settings.branchName]);
         return Object.assign(Object.assign({}, state), { commit });
     });
 }
@@ -170,6 +192,7 @@ function createPR(state, settings, octokit) {
         if (state.repository == null) {
             throw new Error("Repository is unset");
         }
+        const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current']);
         const response = yield octokit.graphql(`
 		mutation updatePR(
 			$branchName: String!,
@@ -194,7 +217,7 @@ function createPR(state, settings, octokit) {
 	`, {
             repoId: state.repository.id,
             branchName: settings.branchName,
-            baseBranch: settings.baseBranch,
+            baseBranch: baseBranch,
             title: settings.prTitle,
             body: renderPRDescription(state, settings),
         });
@@ -220,59 +243,68 @@ function updatePRDescription(pullRequest, state, settings, octokit) {
 }
 exports.updatePRDescription = updatePRDescription;
 function renderPRDescription(state, settings) {
-    let body = settings.prBody;
-    if (state.error != null) {
-        body += "\n\n----\n\n";
-        body += [
-            "### Error:",
-            "",
-            `Applying updates failed for ${state.commit || "(unknown commit)"}:`,
-            "",
-            "```",
-            state.error,
-            "```",
-        ].join("\n");
-    }
-    body += "\n\n";
-    body += "_**Note:** This branch is owned by a bot, and will be force-pushed next time it runs._";
-    return body;
+    const commit = state.commit || "(unknown commit)";
+    const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`;
+    const outputHeader = (state.hasError
+        ? ":no_entry_sign: Update failed"
+        : ":white_check_mark: Update succeeded");
+    return [
+        settings.prBody,
+        "",
+        "",
+        "## " + outputHeader,
+        "Output for update commit " + commit + ":",
+        "",
+        "```",
+        state.log.join("\n"),
+        "```",
+        `See the [workflow run](${runUrl}) for full details.`,
+        "",
+        "_**Note:** This branch is owned by a bot, and will be force-pushed next time it runs._",
+    ].join("\n");
 }
 function catchError(state, fn) {
     try {
         return fn();
     }
     catch (e) {
-        if (e.error == null) {
-            return Object.assign(Object.assign({}, state), { error: e.message });
-        }
-        else {
-            console.error("Ignoring additional error: " + e.message);
-            return state;
-        }
+        addLog(state, "ERROR: " + e.message);
+        return Object.assign(Object.assign({}, state), { hasError: true });
     }
 }
 const execOptions = {
     encoding: 'utf8',
     stdio: ['inherit', 'pipe', 'pipe']
 };
-function handleExec(sh, result) {
+function handleExec(state, cmdDisplay, result) {
     const output = [
         result.stdout.trim(),
         result.stderr.trim(),
     ].filter((stream) => stream.length > 0).join("\n");
-    console.log("+ " + sh);
-    if (output.length > 0) {
-        console.log(output);
+    if (cmdDisplay != null) {
+        addLog(state, "+ " + cmdDisplay);
+        if (output.length > 0) {
+            addLog(state, output);
+        }
     }
     if (result.status != 0) {
-        throw new Error("Command failed: " + sh + "\n\n" + output);
+        throw new Error("Command failed: " + cmdDisplay + "\n\n" + output);
     }
     return result.stdout.trim();
 }
-function cmd(args) {
-    return handleExec(args.join(' '), child_process.spawnSync(args[0], args.slice(1), execOptions));
+function cmd(state, args) {
+    return handleExec(state, args.join(' '), child_process.spawnSync(args[0], args.slice(1), execOptions));
 }
-function sh(script) {
-    return handleExec(script, child_process.spawnSync('bash', ['-euc', script], execOptions));
+function cmdSilent(state, args) {
+    return handleExec(state, null, child_process.spawnSync(args[0], args.slice(1), execOptions));
+}
+function sh(state, script) {
+    return handleExec(state, script, child_process.spawnSync('bash', ['-euc', script], execOptions));
+}
+function addLog(state, message) {
+    // Mutation is a bit cheeky, but simplifies function signatures
+    // and logs are only used for display
+    console.log(message);
+    state.log.push(message);
 }
 //# sourceMappingURL=lib.js.map

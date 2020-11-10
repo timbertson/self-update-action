@@ -4,8 +4,9 @@ import { GitHub } from '@actions/github/lib/utils'
 
 enum StateType { Initial }
 type State = {
-	error: string | null,
+	log: Array<string>,
 	commit: string | null,
+	hasError: boolean,
 	hasChanges: boolean,
 	pullRequest: PullRequest | null,
 	repository: Repository | null,
@@ -17,11 +18,14 @@ type Settings = {
 	repo: string,
 	updateScript: string,
 	applyUpdateScript: string | null,
+	baseBranch: string | null,
 	branchName: string,
-	baseBranch: string,
 	commitMessage: string,
+	authorName: string,
+	authorEmail: string,
 	prTitle: string,
 	prBody: string,
+	runId: string,
 }
 
 export const settingKeys = [
@@ -35,13 +39,18 @@ export const settingKeys = [
 	'commitMessage',
 	'prTitle',
 	'prBody',
+	'authorName',
+	'authorEmail',
 ]
 
 export function parseSettings(inputs: Record<string, string>): Settings {
 	function get(key: string, dfl?: string | undefined): string {
-		const value = inputs[key] || dfl
+		return assertDefined(key, inputs[key] || dfl)
+	}
+
+	function assertDefined(msg: string, value: string | undefined): string {
 		if (!value) {
-			throw new Error(`Missing setting: ${key}`)
+			throw new Error(`Missing setting: ${msg}`)
 		}
 		return value
 	}
@@ -54,11 +63,14 @@ export function parseSettings(inputs: Record<string, string>): Settings {
 		repo: get('repo', repositoryFromEnv[1]),
 		updateScript: get('updateScript'),
 		applyUpdateScript: inputs['applyUpdateScript'] || null,
-		branchName: inputs['branchName'] || 'self-update',
-		baseBranch: inputs['baseBranch'] || cmd(['git', 'branch', '--show-current']),
+		baseBranch: inputs['baseBranch'] || null,
+		branchName: get('branchName', 'self-update'),
 		commitMessage: get('commitMessage', '[bot] self-update'),
-		prTitle: get('prTitle' || '[bot] self-update'),
-		prBody: get('prBody' || 'This is an automated PR from a github action'),
+		prTitle: get('prTitle', '[bot] self-update'),
+		prBody: get('prBody', 'This is an automated PR from a github action'),
+		authorName: get('authorName', 'github-actions'),
+		authorEmail: get('authorEmail', '41898282+github-actions[bot]@users.noreply.github.com'),
+		runId: assertDefined('GITHUB_RUN_ID', process.env['GITHUB_RUN_ID']),
 	}
 }
 
@@ -73,13 +85,16 @@ type Repository = {
 
 type Octokit = InstanceType<typeof GitHub>
 
-async function main(settings: Settings) {
+export async function main(settings: Settings) {
 	const octokit = github.getOctokit(settings.githubToken)
 
-	let state = update(settings);
+	let state = initialState()
+	addLog(state, "Running update script ...")
+	state = initEnv(state, settings);
+	state = update(state, settings);
 	state = applyUpdate(state, settings);
 	state = detectChanges(state, settings);
-	if (state.error == null && !state.hasChanges) {
+	if (!(state.hasError || state.hasChanges)) {
 		console.log("No changes detected; exiting")
 		return
 	}
@@ -88,42 +103,55 @@ async function main(settings: Settings) {
 
 	state = await findPR(state, settings, octokit);
 	state = await updatePR(state, settings, octokit);
-	if (state.error != null) {
+	if (state.hasError) {
 		// make sure errors are reflected in action result
-		throw new Error(state.error)
+		process.exit(1)
 	}
 }
 
-export function update(settings: Settings): State {
-	const initialState = {
-		error: null,
+function initialState(): State {
+	return {
+		log: [],
+		hasError: false,
 		hasChanges: false,
 		pullRequest: null,
 		commit: null,
 		repository: null,
 	}
-	return catchError(initialState, () => {
-		sh(settings.updateScript)
-		return initialState
+}
+
+function initEnv(state: State, settings: Settings): State {
+	;['AUTHOR', 'COMMITTER'].forEach((role) => {
+		process.env[`GIT_${role}_NAME`] = settings.authorName
+		process.env[`GIT_${role}_EMAIL`] = settings.authorEmail
+	})
+	return state
+}
+
+function update(state: State, settings: Settings): State {
+	return catchError(state, () => {
+		sh(state, settings.updateScript)
+		return state
 	})
 }
 
 function applyUpdate(state: State, settings: Settings): State {
-	if (settings.applyUpdateScript == null || state.error != null) {
+	if (settings.applyUpdateScript == null || state.hasError) {
 		return state
 	}
+	console.log("Applying update ...")
 
 	const applyUpdateScript = settings.applyUpdateScript
 	return catchError(state, () => {
-		cmd(["git", "add", "-u"]) // TODO what if no changes?
-		sh(applyUpdateScript)
+		cmd(state, ["git", "add", "-u"]) // TODO what if no changes?
+		sh(state, applyUpdateScript)
 		return state
 	})
 }
 
 function detectChanges(state: State, _settings: Settings): State {
 	try {
-		cmd(["git", "diff-index", "--quiet"])
+		cmd(state, ["git", "diff-files", "--quiet"])
 		return { ...state, hasChanges: false }
 	} catch(e) {
 		// it failed, presumably because there were differences.
@@ -135,10 +163,10 @@ function detectChanges(state: State, _settings: Settings): State {
 function pushBranch(state: State, settings: Settings): State {
 	return catchError(state, () => {
 		if (state.hasChanges) {
-			cmd(["git", "commit", "-a", "-m", settings.commitMessage])
+			cmd(state, ["git", "commit", "-a", "-m", settings.commitMessage])
 		}
-		const commit = cmd(["git", "rev-parse", "HEAD"])
-		cmd(["git", "push", "-f", "origin", "HEAD:refs/heads/"+settings.branchName])
+		const commit = cmd(state, ["git", "rev-parse", "HEAD"])
+		cmd(state, ["git", "push", "-f", "origin", "HEAD:refs/heads/"+settings.branchName])
 		return { ...state, commit }
 	})
 }
@@ -205,6 +233,7 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
 		throw new Error("Repository is unset")
 	}
 	type Response = { createPullRequest: { pullRequest: PullRequest } }
+	const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current'])
 	const response: Response = await octokit.graphql(`
 		mutation updatePR(
 			$branchName: String!,
@@ -230,7 +259,7 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
 	{
 		repoId: state.repository.id,
 		branchName: settings.branchName,
-		baseBranch: settings.baseBranch,
+		baseBranch: baseBranch,
 		title: settings.prTitle,
 		body: renderPRDescription(state, settings),
 	})
@@ -255,35 +284,34 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
 }
 
 function renderPRDescription(state: State, settings: Settings): string {
-	let body = settings.prBody
-	if (state.error != null) {
-		body += "\n\n----\n\n"
-		body += [
-			"### Error:",
-			"",
-			`Applying updates failed for ${state.commit || "(unknown commit)"}:`,
-			"",
-			"```",
-			state.error,
-			"```",
-		].join("\n")
-	}
-
-	body += "\n\n"
-	body += "_**Note:** This branch is owned by a bot, and will be force-pushed next time it runs._"
-	return body
+	const commit = state.commit || "(unknown commit)"
+	const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`
+	const outputHeader = (state.hasError
+		? ":no_entry_sign: Update failed"
+		: ":white_check_mark: Update succeeded"
+	)
+	return [
+		settings.prBody,
+		"",
+		"",
+		"## " + outputHeader,
+		"Output for update commit " + commit + ":",
+		"",
+		"```",
+		state.log.join("\n"),
+		"```",
+		`See the [workflow run](${runUrl}) for full details.`,
+		"",
+		"_**Note:** This branch is owned by a bot, and will be force-pushed next time it runs._",
+	].join("\n")
 }
 
 function catchError(state: State, fn: () => State): State {
 	try {
 		return fn()
 	} catch(e) {
-		if (e.error == null) {
-			return {...state, error: e.message }
-		} else {
-			console.error("Ignoring additional error: " + e.message)
-			return state
-		}
+		addLog(state, "ERROR: " + e.message)
+		return {...state, hasError: true }
 	}
 }
 
@@ -292,27 +320,40 @@ const execOptions: child_process.ExecSyncOptionsWithStringEncoding = {
 	stdio: ['inherit', 'pipe', 'pipe']
 }
 
-function handleExec(sh: string, result: child_process.SpawnSyncReturns<string>): string {
+function handleExec(state: State, cmdDisplay: string | null, result: child_process.SpawnSyncReturns<string>): string {
 	const output = [
 		result.stdout.trim(),
 		result.stderr.trim(),
 	].filter((stream) => stream.length > 0).join("\n")
 
-	console.log("+ " + sh)
-	if (output.length > 0) {
-		console.log(output)
+	if (cmdDisplay != null) {
+		addLog(state, "+ " + cmdDisplay)
+		if (output.length > 0) {
+			addLog(state, output)
+		}
 	}
 
 	if (result.status != 0) {
-		throw new Error("Command failed: " + sh + "\n\n" + output)
+		throw new Error("Command failed: " + cmdDisplay + "\n\n" + output)
 	}
 	return result.stdout.trim()
 }
 
-function cmd(args: string[]): string {
-	return handleExec(args.join(' '), child_process.spawnSync(args[0], args.slice(1), execOptions))
+function cmd(state: State, args: string[]): string {
+	return handleExec(state, args.join(' '), child_process.spawnSync(args[0], args.slice(1), execOptions))
 }
 
-function sh(script: string): string {
-	return handleExec(script, child_process.spawnSync('bash', ['-euc', script], execOptions))
+function cmdSilent(state: State, args: string[]): string {
+	return handleExec(state, null, child_process.spawnSync(args[0], args.slice(1), execOptions))
+}
+
+function sh(state: State, script: string): string {
+	return handleExec(state, script, child_process.spawnSync('bash', ['-euc', script], execOptions))
+}
+
+function addLog(state: State, message: string) {
+	// Mutation is a bit cheeky, but simplifies function signatures
+	// and logs are only used for display
+	console.log(message)
+	state.log.push(message)
 }

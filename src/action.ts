@@ -1,7 +1,7 @@
 import * as core from '@actions/core'
 import * as lib from './lib'
 
-function main() {
+async function main() {
 	try {
 		let env: Record<string, string> = {}
 		lib.settingKeys.forEach((key) => {
@@ -11,7 +11,7 @@ function main() {
 			}
 		})
 		let settings = lib.parseSettings(env)
-		lib.update(settings)
+		await lib.main(settings)
 	} catch(e) {
 		console.log(e)
 		core.setFailed(e.message)

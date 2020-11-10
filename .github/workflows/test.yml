@@ -1,11 +1,13 @@
 ---
 jobs:
   build:
+    runs-on: ubuntu-latest
     steps:
-    - uses: github/checkout@v2
+    - uses: actions/checkout@v2
       with:
         fetch-depth: '1'
-    - uses: timbertson/self-update-action@main
+
+    - uses: timbertson/self-update-action@wip
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date
@@ -13,22 +15,42 @@ jobs:
         prTitle: "[test] applyUpdate"
         prBody: "This is a test PR"
         updateScript: |-
-          echo "Today is ${date}" > current-date
+          echo "Today is $(date)" > current-date
           git add --intent-to-add current-date
 
-    - uses: timbertson/self-update-action@main
+    - uses: timbertson/self-update-action@wip
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date-2
         prTitle: "[test] applyUpdateScript"
         prBody: "This is a test PR"
         updateScript: |-
-          echo "Today is ${date}" > current-date
+          echo "Today is $(date)" > current-date
           git add --intent-to-add current-date
         applyUpdateScript: |-
           sed -i -e 's/is .*/is [censored]/' current-date
 
-    - uses: timbertson/self-update-action@main
+    - uses: timbertson/self-update-action@wip
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        prTitle: "[test] unchanged"
+        branchName: test-unchanged-apply
+        updateScript: |-
+          echo "Today is $(date)" > current-date
+          git add --intent-to-add current-date
+        applyUpdateScript: |-
+          true
+
+    - uses: timbertson/self-update-action@wip
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        prTitle: "[test] unchanged"
+        branchName: test-unchanged-initial
+        updateScript: |-
+          true
+
+    - uses: timbertson/self-update-action@wip
+      continue-on-error: true
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date-fail
@@ -38,24 +60,10 @@ jobs:
           echo "Uh oh..."
           exit 2
 
-    - uses: timbertson/self-update-action@main
-      with:
-        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        prTitle: "[test] unchanged"
-        branchName: test-add-date-3
-        prBody: "This is a test PR"
-        updateScript: |-
-          echo "Today is ${date}" > current-date
-          git add --intent-to-add current-date
-        applyUpdateScript: |-
-          true
-
 name: Self-update test
 'on':
   repository_dispatch:
     types: [test]
   push:
     branches:
-    # This MUST exclude all branches above
-    - main
     - wip
