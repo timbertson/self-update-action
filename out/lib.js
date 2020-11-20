@@ -130,9 +130,7 @@ function detectChanges(state, _settings) {
 }
 function pushBranch(state, settings) {
     return catchError(state, () => {
-        if (state.hasChanges) {
-            cmd(state, ["git", "commit", "-a", "-m", settings.commitMessage]);
-        }
+        cmd(state, ["git", "commit", "--allow-empty", "--all", "--message", settings.commitMessage]);
         const commit = cmd(state, ["git", "rev-parse", "HEAD"]);
         cmd(state, ["git", "push", "-f", "origin", "HEAD:refs/heads/" + settings.branchName]);
         return Object.assign(Object.assign({}, state), { commit });
