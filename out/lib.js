@@ -240,6 +240,16 @@ function updatePRDescription(pullRequest, state, settings, octokit) {
     });
 }
 exports.updatePRDescription = updatePRDescription;
+function censorSecrets(log, settings) {
+    // ugh replaceAll should be a thing...
+    return log.map((line) => {
+        const secret = settings.githubToken;
+        while (line.indexOf(secret) != -1) {
+            line = line.replace(secret, '********');
+        }
+        return line;
+    });
+}
 function renderPRDescription(state, settings) {
     const commit = state.commit || "(unknown commit)";
     const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`;
@@ -254,7 +264,7 @@ function renderPRDescription(state, settings) {
         "Output for update commit " + commit + ":",
         "",
         "```",
-        state.log.join("\n"),
+        censorSecrets(state.log, settings).join("\n"),
         "```",
         `See the [workflow run](${runUrl}) for full details.`,
         "",
