@@ -345,7 +345,12 @@ function handleExec(state: State, cmdDisplay: string | null, result: child_proce
 	}
 
 	if (result.status != 0) {
-		throw new Error("Command failed: " + cmdDisplay + "\n\n" + output)
+		let message = "Command failed"
+		if (cmdDisplay == null) {
+			// we didn't log the output, so include it in the message
+			message += ": " + output
+		}
+		throw new Error(message)
 	}
 	return result.stdout.trim()
 }
