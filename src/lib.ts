@@ -125,6 +125,7 @@ function initEnv(state: State, settings: Settings): State {
 		process.env[`GIT_${role}_NAME`] = settings.authorName
 		process.env[`GIT_${role}_EMAIL`] = settings.authorEmail
 	})
+	process.env['GITHUB_TOKEN'] = settings.githubToken
 	return state
 }
 
@@ -281,14 +282,15 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
 	})
 }
 
+// Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
 	// ugh replaceAll should be a thing...
-	return log.map((line) => {
+	return log.map((output) => {
 		const secret = settings.githubToken
-		while(line.indexOf(secret) != -1) {
-			line = line.replace(secret, '********')
+		while(output.indexOf(secret) != -1) {
+			output = output.replace(secret, '********')
 		}
-		return line
+		return output
 	})
 }
 
