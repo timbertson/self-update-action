@@ -357,7 +357,7 @@ function cmdSilent(state: State, args: string[]): string {
 }
 
 function sh(state: State, script: string): string {
-	return handleExec(state, script, child_process.spawnSync('bash', ['-euc', script], execOptions))
+	return handleExec(state, script, child_process.spawnSync('bash', ['-euc', 'exec 2>&1\n' + script], execOptions))
 }
 
 function addLog(state: State, message: string) {

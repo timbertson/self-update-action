@@ -307,7 +307,7 @@ function cmdSilent(state, args) {
     return handleExec(state, null, child_process.spawnSync(args[0], args.slice(1), execOptions));
 }
 function sh(state, script) {
-    return handleExec(state, script, child_process.spawnSync('bash', ['-euc', script], execOptions));
+    return handleExec(state, script, child_process.spawnSync('bash', ['-euc', 'exec 2>&1\n' + script], execOptions));
 }
 function addLog(state, message) {
     // Mutation is a bit cheeky, but simplifies function signatures
