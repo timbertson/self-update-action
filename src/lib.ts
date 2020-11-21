@@ -161,12 +161,13 @@ function detectChanges(state: State, _settings: Settings): State {
 	}
 }
 
-function pushBranch(state: State, settings: Settings): State {
-	// TODO use octokit here?
+export function pushBranch(state: State, settings: Settings): State {
 	return catchError(state, () => {
 		cmd(state, ["git", "commit", "--allow-empty", "--all", "--message", settings.commitMessage])
 		const commit = cmd(state, ["git", "rev-parse", "HEAD"])
-		cmd(state, ["git", "push", "-f",
+		cmd(state, ["git",
+			"-c", "http.https://github.com/.extraheader=",
+			"push", "-f",
 			`https://x-access-token:${settings.githubToken}@github.com/${settings.owner}/${settings.repo}.git`,
 			`HEAD:refs/heads/${settings.branchName}`
 		])

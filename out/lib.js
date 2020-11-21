@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePRDescription = exports.updatePR = exports.findPR = exports.main = exports.parseSettings = exports.settingKeys = void 0;
+exports.updatePRDescription = exports.updatePR = exports.findPR = exports.pushBranch = exports.main = exports.parseSettings = exports.settingKeys = void 0;
 const child_process = require("child_process");
 const github = require("@actions/github");
 var StateType;
@@ -130,17 +130,19 @@ function detectChanges(state, _settings) {
     }
 }
 function pushBranch(state, settings) {
-    // TODO use octokit here?
     return catchError(state, () => {
         cmd(state, ["git", "commit", "--allow-empty", "--all", "--message", settings.commitMessage]);
         const commit = cmd(state, ["git", "rev-parse", "HEAD"]);
-        cmd(state, ["git", "push", "-f",
+        cmd(state, ["git",
+            "-c", "http.https://github.com/.extraheader=",
+            "push", "-f",
             `https://x-access-token:${settings.githubToken}@github.com/${settings.owner}/${settings.repo}.git`,
             `HEAD:refs/heads/${settings.branchName}`
         ]);
         return Object.assign(Object.assign({}, state), { commit });
     });
 }
+exports.pushBranch = pushBranch;
 function findPR(state, settings, octokit) {
     return __awaiter(this, void 0, void 0, function* () {
         const { repo, owner, branchName } = settings;
