@@ -144,7 +144,7 @@ function applyUpdate(state: State, settings: Settings): State {
 
 	const applyUpdateScript = settings.applyUpdateScript
 	return catchError(state, () => {
-		cmd(state, ["git", "add", "-u"]) // TODO what if no changes?
+		cmd(state, ["git", "add"])
 		sh(state, applyUpdateScript)
 		return state
 	})
