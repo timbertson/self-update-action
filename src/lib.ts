@@ -144,7 +144,7 @@ function applyUpdate(state: State, settings: Settings): State {
 
 	const applyUpdateScript = settings.applyUpdateScript
 	return catchError(state, () => {
-		cmd(state, ["git", "add"])
+		cmd(state, ["git", "add", "."])
 		sh(state, applyUpdateScript)
 		return state
 	})
