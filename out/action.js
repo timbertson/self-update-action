@@ -22,7 +22,13 @@ function main() {
                 }
             });
             let settings = lib.parseSettings(env);
-            yield lib.main(settings);
+            const pr = yield lib.main(settings);
+            if (pr != null) {
+                console.log(`Setting output pr_number=${pr.number}`);
+                core.setOutput('pr_number', pr.number.toString());
+                console.log(`Setting output pr_url=${pr.url}`);
+                core.setOutput('pr_url', pr.url);
+            }
         }
         catch (e) {
             console.log(e);
