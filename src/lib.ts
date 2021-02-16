@@ -14,6 +14,7 @@ type State = {
 
 type Settings = {
   githubToken: string,
+  githubRepository: string,
   owner: string,
   repo: string,
   updateScript: string,
@@ -59,6 +60,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
 
   return {
     githubToken: get('GITHUB_TOKEN'),
+    githubRepository: process.env['GITHUB_REPOSITORY'] || "",
     owner: get('owner', repositoryFromEnv[0]),
     repo: get('repo', repositoryFromEnv[1]),
     updateScript: get('updateScript'),
@@ -301,7 +303,7 @@ function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
 
 function renderPRDescription(state: State, settings: Settings): string {
   const commit = state.commit || "(unknown commit)"
-  const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`
+  const runUrl = `https://github.com/${settings.githubRepository}/actions/runs/${settings.runId}`
   const outputHeader = (state.hasError
     ? ":no_entry_sign: Update failed"
     : ":white_check_mark: Update succeeded"

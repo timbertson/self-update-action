@@ -43,6 +43,7 @@ function parseSettings(inputs) {
     const repositoryFromEnv = (process.env['GITHUB_REPOSITORY'] || "").split('/');
     return {
         githubToken: get('GITHUB_TOKEN'),
+        githubRepository: process.env['GITHUB_REPOSITORY'] || "",
         owner: get('owner', repositoryFromEnv[0]),
         repo: get('repo', repositoryFromEnv[1]),
         updateScript: get('updateScript'),
@@ -260,7 +261,7 @@ function censorSecrets(log, settings) {
 }
 function renderPRDescription(state, settings) {
     const commit = state.commit || "(unknown commit)";
-    const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`;
+    const runUrl = `https://github.com/${settings.githubRepository}/actions/runs/${settings.runId}`;
     const outputHeader = (state.hasError
         ? ":no_entry_sign: Update failed"
         : ":white_check_mark: Update succeeded");
