@@ -17,7 +17,7 @@ type Settings = {
   owner: string,
   repo: string,
   updateScript: string,
-  applyUpdateScript: string | null,
+  setupScript: string | null,
   baseBranch: string | null,
   branchName: string,
   commitMessage: string,
@@ -33,7 +33,7 @@ export const settingKeys = [
   'owner',
   'repo',
   'updateScript',
-  'applyUpdateScript',
+  'setupScript',
   'branchName',
   'baseBranch',
   'commitMessage',
@@ -62,7 +62,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     owner: get('owner', repositoryFromEnv[0]),
     repo: get('repo', repositoryFromEnv[1]),
     updateScript: get('updateScript'),
-    applyUpdateScript: inputs['applyUpdateScript'] || null,
+    setupScript: inputs['setupScript'] || null,
     baseBranch: inputs['baseBranch'] || null,
     branchName: get('branchName', 'self-update'),
     commitMessage: get('commitMessage', '[bot] self-update'),
@@ -91,8 +91,8 @@ export async function main(settings: Settings) {
   let state = initialState()
   addLog(state, "Running update script ...")
   state = initEnv(state, settings);
+  state = setup(state, settings);
   state = update(state, settings);
-  state = applyUpdate(state, settings);
   state = detectChanges(state, settings);
   if (!(state.hasError || state.hasChanges)) {
     console.log("No changes detected; exiting")
@@ -130,22 +130,26 @@ function initEnv(state: State, settings: Settings): State {
 }
 
 function update(state: State, settings: Settings): State {
+  if (state.hasError) {
+    return state
+  }
   return catchError(state, () => {
     sh(state, settings.updateScript)
+    cmd(state, ["git", "add", "--intent-to-add", "."])
     return state
   })
 }
 
-function applyUpdate(state: State, settings: Settings): State {
-  if (settings.applyUpdateScript == null || state.hasError) {
+function setup(state: State, settings: Settings): State {
+  if (settings.setupScript == null || state.hasError) {
     return state
   }
-  console.log("Applying update ...")
+  console.log("Running Setup ...")
 
-  const applyUpdateScript = settings.applyUpdateScript
+  const setupScript = settings.setupScript
   return catchError(state, () => {
     cmd(state, ["git", "add", "."])
-    sh(state, applyUpdateScript)
+    sh(state, setupScript)
     return state
   })
 }
@@ -154,7 +158,7 @@ function detectChanges(state: State, _settings: Settings): State {
   try {
     cmd(state, ["git", "diff-files", "--quiet"])
     return { ...state, hasChanges: false }
-  } catch(e) {
+  } catch (e) {
     // it failed, presumably because there were differences.
     // (if not, the commit will fail later)
     return { ...state, hasChanges: true }
@@ -224,7 +228,7 @@ export async function updatePR(state: State, settings: Settings, octokit: Octoki
   if (state.pullRequest == null) {
     const pullRequest = await createPR(state, settings, octokit)
     console.log(`Created PR ${pullRequest.url}`)
-    return {...state, pullRequest }
+    return { ...state, pullRequest }
   } else {
     console.log(`Updating PR ${state.pullRequest.url}`)
     await updatePRDescription(state.pullRequest, state, settings, octokit)
@@ -260,13 +264,13 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
       }
     }
   `,
-  {
-    repoId: state.repository.id,
-    branchName: settings.branchName,
-    baseBranch: baseBranch,
-    title: settings.prTitle,
-    body: renderPRDescription(state, settings),
-  })
+    {
+      repoId: state.repository.id,
+      branchName: settings.branchName,
+      baseBranch: baseBranch,
+      title: settings.prTitle,
+      body: renderPRDescription(state, settings),
+    })
   /* console.log(JSON.stringify(response)) */
   return response.createPullRequest.pullRequest
 }
@@ -292,7 +296,7 @@ function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
   // ugh replaceAll should be a thing...
   return log.map((output) => {
     const secret = settings.githubToken
-    while(output.indexOf(secret) != -1) {
+    while (output.indexOf(secret) != -1) {
       output = output.replace(secret, '********')
     }
     return output
@@ -325,9 +329,9 @@ function renderPRDescription(state: State, settings: Settings): string {
 function catchError(state: State, fn: () => State): State {
   try {
     return fn()
-  } catch(e) {
+  } catch (e) {
     addLog(state, "ERROR: " + e.message)
-    return {...state, hasError: true }
+    return { ...state, hasError: true }
   }
 }
 

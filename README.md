@@ -32,11 +32,9 @@ jobs:
 
 ## Workflow:
 
-1. evaluate the `updateScript` setting (a bash string)
-2. If the `applyUpdateScript` setting is provided:
-   - Stage all changes from the `updateScript` step, so that they don't count as changes
-   - Evaluate the `applyUpdateScript` setting
-3. If there are no unstaged git changes or errors, the action terminates successfully (nothing to do)
+1. If the `setupScript` input is declared. Evaluate the `setupScript` (a bash string), all changes are staged, and will be ignored when detecting changes, but will be included in the final commit.
+2. evaluate the `updateScript` setting (a bash string)
+3. Detect if there are no unstaged git changes or errors, the action terminates successfully (nothing to do)
 4. commit to the branch specified in `branchName` setting, and **force push** to `origin`
 5. Search for open PRs for this branch
    - If none are found, create one (against the `baseBranch` setting, defaulting to the original checked-out branch)
