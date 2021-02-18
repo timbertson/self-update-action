@@ -2,6 +2,7 @@ name: 'Self-update'
 description: 'Automate the creation of update pull requests'
 inputs:
   GITHUB_TOKEN: { "description": 'TODO', required: true }
+  repository: { "description": 'The GitHub repository in the form owner/repo defaults to GITHUB_REPOSITORY', required: false }
   authorName: { "description": 'TODO', required: false }
   authorEmail: { "description": 'TODO', required: false }
   updateScript: { "description": 'TODO', required: true }

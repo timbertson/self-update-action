@@ -31,8 +31,7 @@ type Settings = {
 
 export const settingKeys = [
   'GITHUB_TOKEN',
-  'owner',
-  'repo',
+  'repository',
   'updateScript',
   'applyUpdateScript',
   'branchName',
@@ -56,7 +55,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     return value
   }
 
-  const repositoryFromEnv = (process.env['GITHUB_REPOSITORY'] || "").split('/')
+  const repositoryFromEnv = get('repository', process.env['GITHUB_REPOSITORY'] || "").split('/');
 
   return {
     githubToken: get('GITHUB_TOKEN'),
@@ -156,7 +155,7 @@ function detectChanges(state: State, _settings: Settings): State {
   try {
     cmd(state, ["git", "diff-files", "--quiet"])
     return { ...state, hasChanges: false }
-  } catch(e) {
+  } catch (e) {
     // it failed, presumably because there were differences.
     // (if not, the commit will fail later)
     return { ...state, hasChanges: true }
@@ -209,11 +208,11 @@ export async function findPR(state: State, settings: Settings, octokit: Octokit)
       }
     }
   `,
-  {
-    owner,
-    repo,
-    branchName,
-  })
+    {
+      owner,
+      repo,
+      branchName,
+    })
 
   const repository = { id: response.repository.id }
   const openPRs = response.repository.pullRequests.edges.map((e) => e.node);
@@ -226,7 +225,7 @@ export async function updatePR(state: State, settings: Settings, octokit: Octoki
   if (state.pullRequest == null) {
     const pullRequest = await createPR(state, settings, octokit)
     console.log(`Created PR ${pullRequest.url}`)
-    return {...state, pullRequest }
+    return { ...state, pullRequest }
   } else {
     console.log(`Updating PR ${state.pullRequest.url}`)
     await updatePRDescription(state.pullRequest, state, settings, octokit)
@@ -262,13 +261,13 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
       }
     }
   `,
-  {
-    repoId: state.repository.id,
-    branchName: settings.branchName,
-    baseBranch: baseBranch,
-    title: settings.prTitle,
-    body: renderPRDescription(state, settings),
-  })
+    {
+      repoId: state.repository.id,
+      branchName: settings.branchName,
+      baseBranch: baseBranch,
+      title: settings.prTitle,
+      body: renderPRDescription(state, settings),
+    })
   /* console.log(JSON.stringify(response)) */
   return response.createPullRequest.pullRequest
 }
@@ -283,10 +282,10 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
       }
     }
   `,
-  {
-    id: pullRequest.id,
-    body: renderPRDescription(state, settings),
-  })
+    {
+      id: pullRequest.id,
+      body: renderPRDescription(state, settings),
+    })
 }
 
 // Since we're posting command output to github, we need to replicate github's censoring
@@ -294,7 +293,7 @@ function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
   // ugh replaceAll should be a thing...
   return log.map((output) => {
     const secret = settings.githubToken
-    while(output.indexOf(secret) != -1) {
+    while (output.indexOf(secret) != -1) {
       output = output.replace(secret, '********')
     }
     return output
@@ -327,9 +326,9 @@ function renderPRDescription(state: State, settings: Settings): string {
 function catchError(state: State, fn: () => State): State {
   try {
     return fn()
-  } catch(e) {
+  } catch (e) {
     addLog(state, "ERROR: " + e.message)
-    return {...state, hasError: true }
+    return { ...state, hasError: true }
   }
 }
 
