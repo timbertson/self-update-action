@@ -32,10 +32,11 @@ jobs:
 
 ## Workflow:
 
-1. If the `setupScript` input is declared. Evaluate the `setupScript` (a bash string), all changes are staged, and will be ignored when detecting changes, but will be included in the final commit.
-2. evaluate the `updateScript` setting (a bash string)
-3. Detect if there are no unstaged git changes or errors, the action terminates successfully (nothing to do)
-4. commit to the branch specified in `branchName` setting, and **force push** to `origin`
+1. If the `setupScript` setting (a bash string) is provided, evaluate it and stage all changes into git.
+2. Evaluate the `updateScript` setting (a bash string)
+3. If there are no errors or (unstaged) git changes, the action terminates successfully (nothing to do)
+   - By checking for only unstaged changes, we only consider changes introduced by the `updateScript`, not the `setupScript`.
+4. Commit to the branch specified in `branchName` setting, and **force push** to `origin`
 5. Search for open PRs for this branch
    - If none are found, create one (against the `baseBranch` setting, defaulting to the original checked-out branch)
 6. Update the PR description based on the template, appending any errors that were encountered

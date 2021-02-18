@@ -16,8 +16,8 @@ type Settings = {
   githubToken: string,
   owner: string,
   repo: string,
-  updateScript: string,
   setupScript: string | null,
+  updateScript: string,
   baseBranch: string | null,
   branchName: string,
   commitMessage: string,
@@ -61,8 +61,8 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     githubToken: get('GITHUB_TOKEN'),
     owner: get('owner', repositoryFromEnv[0]),
     repo: get('repo', repositoryFromEnv[1]),
-    updateScript: get('updateScript'),
     setupScript: inputs['setupScript'] || null,
+    updateScript: get('updateScript'),
     baseBranch: inputs['baseBranch'] || null,
     branchName: get('branchName', 'self-update'),
     commitMessage: get('commitMessage', '[bot] self-update'),
@@ -129,27 +129,28 @@ function initEnv(state: State, settings: Settings): State {
   return state
 }
 
+function setup(state: State, settings: Settings): State {
+  if (settings.setupScript == null || state.hasError) {
+    return state
+  }
+  console.log("Running setup script ...")
+
+  const setupScript = settings.setupScript
+  return catchError(state, () => {
+    cmd(state, ["git", "add", "."])
+    sh(state, setupScript)
+    return state
+  })
+}
+
 function update(state: State, settings: Settings): State {
   if (state.hasError) {
     return state
   }
   return catchError(state, () => {
     sh(state, settings.updateScript)
+    // include added files as changes (for when we later diff against the index)
     cmd(state, ["git", "add", "--intent-to-add", "."])
-    return state
-  })
-}
-
-function setup(state: State, settings: Settings): State {
-  if (settings.setupScript == null || state.hasError) {
-    return state
-  }
-  console.log("Running Setup ...")
-
-  const setupScript = settings.setupScript
-  return catchError(state, () => {
-    cmd(state, ["git", "add", "."])
-    sh(state, setupScript)
     return state
   })
 }
