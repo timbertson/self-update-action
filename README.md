@@ -1,5 +1,10 @@
 # Self-update action
 
+## Versioning:
+
+ - `v1` is the active branch
+ - `main` was the original active branch (consider it `v0`), but will be removed eventually to remove confusion
+
 ### Motivation:
 
 There are many "automatic update" tools with deep integration into a particular package manager. They are big and complex and work well if you have that exact need.
