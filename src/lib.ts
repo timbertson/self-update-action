@@ -14,6 +14,7 @@ type State = {
 
 type Settings = {
   githubToken: string,
+  githubRepository: string,
   owner: string,
   repo: string,
   setupScript: string | null,
@@ -30,8 +31,7 @@ type Settings = {
 
 export const settingKeys = [
   'GITHUB_TOKEN',
-  'owner',
-  'repo',
+  'repository',
   'updateScript',
   'setupScript',
   'branchName',
@@ -55,10 +55,11 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     return value
   }
 
-  const repositoryFromEnv = (process.env['GITHUB_REPOSITORY'] || "").split('/')
+  const repositoryFromEnv = get('repository', process.env['GITHUB_REPOSITORY'] || "").split('/');
 
   return {
     githubToken: get('GITHUB_TOKEN'),
+    githubRepository: process.env['GITHUB_REPOSITORY'] || "",
     owner: get('owner', repositoryFromEnv[0]),
     repo: get('repo', repositoryFromEnv[1]),
     setupScript: inputs['setupScript'] || null,
@@ -215,11 +216,11 @@ export async function findPR(state: State, settings: Settings, octokit: Octokit)
       }
     }
   `,
-  {
-    owner,
-    repo,
-    branchName,
-  })
+    {
+      owner,
+      repo,
+      branchName,
+    })
 
   const repository = { id: response.repository.id }
   const openPRs = response.repository.pullRequests.edges.map((e) => e.node);
@@ -290,10 +291,10 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
       }
     }
   `,
-  {
-    id: pullRequest.id,
-    body: renderPRDescription(state, settings),
-  })
+    {
+      id: pullRequest.id,
+      body: renderPRDescription(state, settings),
+    })
 }
 
 // Since we're posting command output to github, we need to replicate github's censoring
@@ -310,7 +311,7 @@ function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
 
 function renderPRDescription(state: State, settings: Settings): string {
   const commit = state.commit || "(unknown commit)"
-  const runUrl = `https://github.com/${settings.owner}/${settings.repo}/actions/runs/${settings.runId}`
+  const runUrl = `https://github.com/${settings.githubRepository}/actions/runs/${settings.runId}`
   const outputHeader = (state.hasError
     ? ":no_entry_sign: Update failed"
     : ":white_check_mark: Update succeeded"
