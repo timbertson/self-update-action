@@ -69,7 +69,7 @@ function main(settings) {
         state = detectChanges(state, settings);
         if (!(state.hasError || state.hasChanges)) {
             console.log("No changes detected; exiting");
-            return;
+            return null;
         }
         state = pushBranch(state, settings);
         state = yield findPR(state, settings, octokit);
@@ -78,6 +78,7 @@ function main(settings) {
             // make sure errors are reflected in action result
             process.exit(1);
         }
+        return state.pullRequest;
     });
 }
 exports.main = main;
@@ -163,6 +164,7 @@ function findPR(state, settings, octokit) {
           edges {
             node {
               id
+              number
               url
             }
           }
@@ -220,6 +222,7 @@ function createPR(state, settings, octokit) {
       }) {
         pullRequest {
           id
+          number
           url
         }
       }

@@ -12,6 +12,12 @@ inputs:
   prTitle: { "description": 'TODO', required: false }
   prBody: { "description": 'TODO', required: false }
 
+outputs:
+  pr_number:
+    description: "The number of the PR that was created/updated"
+  pr_url:
+    description: "The URL to the PR that was created/updated"
+
 runs:
   using: 'node12'
   main: 'action.js'

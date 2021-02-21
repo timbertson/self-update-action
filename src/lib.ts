@@ -77,6 +77,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
 type PullRequest = {
   id: string,
   url: string,
+  number: number,
 }
 
 type Repository = {
@@ -85,7 +86,7 @@ type Repository = {
 
 type Octokit = InstanceType<typeof GitHub>
 
-export async function main(settings: Settings) {
+export async function main(settings: Settings): Promise<PullRequest | null> {
   const octokit = github.getOctokit(settings.githubToken)
 
   let state = initialState()
@@ -96,7 +97,7 @@ export async function main(settings: Settings) {
   state = detectChanges(state, settings);
   if (!(state.hasError || state.hasChanges)) {
     console.log("No changes detected; exiting")
-    return
+    return null
   }
 
   state = pushBranch(state, settings);
@@ -107,6 +108,7 @@ export async function main(settings: Settings) {
     // make sure errors are reflected in action result
     process.exit(1)
   }
+  return state.pullRequest
 }
 
 function initialState(): State {
@@ -205,6 +207,7 @@ export async function findPR(state: State, settings: Settings, octokit: Octokit)
           edges {
             node {
               id
+              number
               url
             }
           }
@@ -260,6 +263,7 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
       }) {
         pullRequest {
           id
+          number
           url
         }
       }
