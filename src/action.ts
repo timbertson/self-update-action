@@ -11,8 +11,14 @@ async function main() {
       }
     })
     let settings = lib.parseSettings(env)
-    await lib.main(settings)
-  } catch(e) {
+    const pr = await lib.main(settings)
+    if (pr != null) {
+      console.log(`Setting output pr_number=${pr.number}`)
+      core.setOutput('pr_number', pr.number.toString())
+      console.log(`Setting output pr_url=${pr.url}`)
+      core.setOutput('pr_url', pr.url)
+    }
+  } catch (e) {
     console.log(e)
     core.setFailed(e.message)
   }
