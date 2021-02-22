@@ -140,8 +140,8 @@ function setup(state: State, settings: Settings): State {
 
   const setupScript = settings.setupScript
   return catchError(state, () => {
-    cmd(state, ["git", "add", "."])
     sh(state, setupScript)
+    cmd(state, ["git", "add", "."])
     return state
   })
 }
