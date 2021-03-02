@@ -108,8 +108,8 @@ function setup(state, settings) {
     console.log("Running setup script ...");
     const setupScript = settings.setupScript;
     return catchError(state, () => {
-        cmd(state, ["git", "add", "."]);
         sh(state, setupScript);
+        cmd(state, ["git", "add", "."]);
         return state;
     });
 }
