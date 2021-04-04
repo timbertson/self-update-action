@@ -37,10 +37,12 @@ jobs:
 
 ## Workflow:
 
-1. If the `setupScript` setting (a bash string) is provided, evaluate it and stage all changes into git.
+1. If the `setupScript` setting (a bash string) is provided, evaluate it and stage all changes into git
+1. If the `identityScript` setting (a bash string) is provided, evaluate it and store the output
 2. Evaluate the `updateScript` setting (a bash string)
 3. If there are no errors or (unstaged) git changes, the action terminates successfully (nothing to do)
-   - By checking for only unstaged changes, we only consider changes introduced by the `updateScript`, not the `setupScript`.
+   - By checking for only unstaged changes, we only consider changes introduced by the `updateScript`, not the `setupScript`
+1. If the `identityScript` setting is provided, evaluate it again and terminate successfully if the result matches the value before the update was run
 4. Commit to the branch specified in `branchName` setting, and **force push** to `origin`
 5. Search for open PRs for this branch
    - If none are found, create one (against the `baseBranch` setting, defaulting to the original checked-out branch)

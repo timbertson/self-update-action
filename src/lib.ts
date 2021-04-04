@@ -8,6 +8,7 @@ type State = {
   commit: string | null,
   hasError: boolean,
   hasChanges: boolean,
+  identity: string | null,
   pullRequest: PullRequest | null,
   repository: Repository | null,
 }
@@ -19,6 +20,7 @@ type Settings = {
   repo: string,
   setupScript: string | null,
   updateScript: string,
+  identityScript: string | null,
   baseBranch: string | null,
   branchName: string,
   commitMessage: string,
@@ -34,6 +36,7 @@ export const settingKeys = [
   'repository',
   'updateScript',
   'setupScript',
+  'identityScript',
   'branchName',
   'baseBranch',
   'commitMessage',
@@ -64,6 +67,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     repo: get('repo', repositoryFromEnv[1]),
     setupScript: inputs['setupScript'] || null,
     updateScript: get('updateScript'),
+    identityScript: inputs['identityScript'] || null,
     baseBranch: inputs['baseBranch'] || null,
     branchName: get('branchName', 'self-update'),
     commitMessage: get('commitMessage', '[bot] self-update'),
@@ -91,8 +95,8 @@ export async function main(settings: Settings): Promise<PullRequest | null> {
   const octokit = github.getOctokit(settings.githubToken)
 
   let state = initialState()
-  addLog(state, "Running update script ...")
   state = initEnv(state, settings);
+  state = applyIdentity(state, settings);
   state = setup(state, settings);
   state = update(state, settings);
   state = detectChanges(state, settings);
@@ -117,6 +121,7 @@ function initialState(): State {
     log: [],
     hasError: false,
     hasChanges: false,
+    identity: null,
     pullRequest: null,
     commit: null,
     repository: null,
@@ -132,11 +137,24 @@ function initEnv(state: State, settings: Settings): State {
   return state
 }
 
+function applyIdentity(state: State, settings: Settings): State {
+  const identityScript = settings.identityScript
+  if (identityScript == null || state.hasError) {
+    return state
+  }
+  addLog(state, "Running identity script ...")
+
+  return catchError(state, () => {
+    const output = shStdout(state, identityScript)
+    return { ...state, identity: output }
+  })
+}
+
 function setup(state: State, settings: Settings): State {
   if (settings.setupScript == null || state.hasError) {
     return state
   }
-  console.log("Running setup script ...")
+  addLog(state, "Running setup script ...")
 
   const setupScript = settings.setupScript
   return catchError(state, () => {
@@ -150,6 +168,8 @@ function update(state: State, settings: Settings): State {
   if (state.hasError) {
     return state
   }
+  addLog(state, "Running update script ...")
+
   return catchError(state, () => {
     sh(state, settings.updateScript)
     // include added files as changes (for when we later diff against the index)
@@ -158,14 +178,25 @@ function update(state: State, settings: Settings): State {
   })
 }
 
-function detectChanges(state: State, _settings: Settings): State {
+function detectChanges(state: State, settings: Settings): State {
   try {
     cmd(state, ["git", "diff-files", "--quiet"])
     return { ...state, hasChanges: false }
   } catch (e) {
     // it failed, presumably because there were differences.
     // (if not, the commit will fail later)
-    return { ...state, hasChanges: true }
+    // If there were differences, we may now want to
+    // suppress them if the identity is unchanged
+    if (settings.identityScript != null) {
+      const newState = applyIdentity(state, settings);
+      const unchanged = state.identity === newState.identity;
+      if (unchanged) {
+        addLog(state, "Post-update identity is unchanged ...")
+      }
+      return { ...newState, hasChanges: !unchanged }
+    } else {
+      return { ...state, hasChanges: true }
+    }
   }
 }
 
@@ -380,6 +411,10 @@ function cmdSilent(state: State, args: string[]): string {
 
 function sh(state: State, script: string): string {
   return handleExec(state, script, child_process.spawnSync('bash', ['-euc', 'exec 2>&1\n' + script], execOptions))
+}
+
+function shStdout(state: State, script: string): string {
+  return handleExec(state, script, child_process.spawnSync('bash', ['-euc', script], execOptions))
 }
 
 function addLog(state: State, message: string) {
