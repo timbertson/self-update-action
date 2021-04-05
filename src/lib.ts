@@ -237,7 +237,7 @@ export async function updatePR(state: State, settings: Settings, octokit: Octoki
     return { ...state, pullRequest }
   } else {
     console.log(`Updating PR ${state.pullRequest.url}`)
-    await updatePRDescription(state.pullRequest, state, settings, octokit)
+    await updatePRContents(state.pullRequest, state, settings, octokit)
     return state
   }
 }
@@ -258,8 +258,8 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
     ) {
       createPullRequest(input: {
         repositoryId: $repoId,
-        baseRefName: $baseBranch,
         headRefName: $branchName,
+        baseRefName: $baseBranch,
         title: $title,
         body: $body
       }) {
@@ -282,10 +282,21 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
   return response.createPullRequest.pullRequest
 }
 
-export async function updatePRDescription(pullRequest: PullRequest, state: State, settings: Settings, octokit: Octokit): Promise<void> {
+export async function updatePRContents(pullRequest: PullRequest, state: State, settings: Settings, octokit: Octokit): Promise<void> {
+  const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current'])
   await octokit.graphql(`
-    mutation updatePR($id: String!, $body: String!) {
-      updatePullRequest(input: { pullRequestId: $id, body: $body }) {
+    mutation updatePR(
+      $id: String!,
+      $baseBranch: String!,
+      $body: String!,
+      $title: String!
+    ) {
+      updatePullRequest(input: {
+        pullRequestId: $id,
+        baseRefName: $baseBranch,
+        title: $title,
+        body: $body
+      }) {
         pullRequest {
           id
         }
@@ -294,6 +305,8 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
   `,
     {
       id: pullRequest.id,
+      baseBranch: baseBranch,
+      title: settings.prTitle,
       body: renderPRDescription(state, settings),
     })
 }

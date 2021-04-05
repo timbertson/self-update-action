@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePRDescription = exports.updatePR = exports.findPR = exports.pushBranch = exports.main = exports.parseSettings = exports.settingKeys = void 0;
+exports.updatePRContents = exports.updatePR = exports.findPR = exports.pushBranch = exports.main = exports.parseSettings = exports.settingKeys = void 0;
 const child_process = require("child_process");
 const github = require("@actions/github");
 var StateType;
@@ -62,7 +62,6 @@ function main(settings) {
     return __awaiter(this, void 0, void 0, function* () {
         const octokit = github.getOctokit(settings.githubToken);
         let state = initialState();
-        addLog(state, "Running update script ...");
         state = initEnv(state, settings);
         state = setup(state, settings);
         state = update(state, settings);
@@ -105,7 +104,7 @@ function setup(state, settings) {
     if (settings.setupScript == null || state.hasError) {
         return state;
     }
-    console.log("Running setup script ...");
+    addLog(state, "Running setup script ...");
     const setupScript = settings.setupScript;
     return catchError(state, () => {
         sh(state, setupScript);
@@ -117,6 +116,7 @@ function update(state, settings) {
     if (state.hasError) {
         return state;
     }
+    addLog(state, "Running update script ...");
     return catchError(state, () => {
         sh(state, settings.updateScript);
         // include added files as changes (for when we later diff against the index)
@@ -193,7 +193,7 @@ function updatePR(state, settings, octokit) {
         }
         else {
             console.log(`Updating PR ${state.pullRequest.url}`);
-            yield updatePRDescription(state.pullRequest, state, settings, octokit);
+            yield updatePRContents(state.pullRequest, state, settings, octokit);
             return state;
         }
     });
@@ -215,8 +215,8 @@ function createPR(state, settings, octokit) {
     ) {
       createPullRequest(input: {
         repositoryId: $repoId,
-        baseRefName: $baseBranch,
         headRefName: $branchName,
+        baseRefName: $baseBranch,
         title: $title,
         body: $body
       }) {
@@ -238,11 +238,22 @@ function createPR(state, settings, octokit) {
         return response.createPullRequest.pullRequest;
     });
 }
-function updatePRDescription(pullRequest, state, settings, octokit) {
+function updatePRContents(pullRequest, state, settings, octokit) {
     return __awaiter(this, void 0, void 0, function* () {
+        const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current']);
         yield octokit.graphql(`
-    mutation updatePR($id: String!, $body: String!) {
-      updatePullRequest(input: { pullRequestId: $id, body: $body }) {
+    mutation updatePR(
+      $id: String!,
+      $baseBranch: String!,
+      $body: String!,
+      $title: String!
+    ) {
+      updatePullRequest(input: {
+        pullRequestId: $id,
+        baseRefName: $baseBranch,
+        title: $title,
+        body: $body
+      }) {
         pullRequest {
           id
         }
@@ -250,11 +261,13 @@ function updatePRDescription(pullRequest, state, settings, octokit) {
     }
   `, {
             id: pullRequest.id,
+            baseBranch: baseBranch,
+            title: settings.prTitle,
             body: renderPRDescription(state, settings),
         });
     });
 }
-exports.updatePRDescription = updatePRDescription;
+exports.updatePRContents = updatePRContents;
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log, settings) {
     // ugh replaceAll should be a thing...
