@@ -7,7 +7,7 @@ jobs:
       with:
         fetch-depth: '1'
 
-    - uses: timbertson/self-update-action@wip
+    - uses: ./
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date
@@ -17,7 +17,7 @@ jobs:
         updateScript: |-
           echo "Today is $(date)" > current-date
 
-    - uses: timbertson/self-update-action@wip
+    - uses: ./
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date-2
@@ -28,7 +28,7 @@ jobs:
         updateScript: |-
           sed -i -e 's/is .*/is [censored]/' current-date
 
-    - uses: timbertson/self-update-action@wip
+    - uses: ./
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         prTitle: "[test] unchanged"
@@ -38,7 +38,7 @@ jobs:
         updateScript: |-
           true
 
-    - uses: timbertson/self-update-action@wip
+    - uses: ./
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         prTitle: "[test] unchanged"
@@ -46,7 +46,7 @@ jobs:
         updateScript: |-
           true
 
-    - uses: timbertson/self-update-action@wip
+    - uses: ./
       continue-on-error: true
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
