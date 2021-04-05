@@ -35,7 +35,6 @@ jobs:
         branchName: test-unchanged-apply
         setupScript: |-
           echo "Today is $(date)" > current-date
-          git add --intent-to-add current-date
         updateScript: |-
           true
 
@@ -63,6 +62,7 @@ on:
   push:
     branches:
      - wip
+     - v*
   schedule:
     # - cron: "*/5 * * * *" # every 5m
     - cron: "0 0 * * 0" # every sunday

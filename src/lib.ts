@@ -91,7 +91,6 @@ export async function main(settings: Settings): Promise<PullRequest | null> {
   const octokit = github.getOctokit(settings.githubToken)
 
   let state = initialState()
-  addLog(state, "Running update script ...")
   state = initEnv(state, settings);
   state = setup(state, settings);
   state = update(state, settings);
@@ -136,7 +135,7 @@ function setup(state: State, settings: Settings): State {
   if (settings.setupScript == null || state.hasError) {
     return state
   }
-  console.log("Running setup script ...")
+  addLog(state, "Running setup script ...")
 
   const setupScript = settings.setupScript
   return catchError(state, () => {
@@ -150,6 +149,8 @@ function update(state: State, settings: Settings): State {
   if (state.hasError) {
     return state
   }
+  addLog(state, "Running update script ...")
+
   return catchError(state, () => {
     sh(state, settings.updateScript)
     // include added files as changes (for when we later diff against the index)

@@ -1,17 +1,17 @@
 name: 'Self-update'
 description: 'Automate the creation of update pull requests'
 inputs:
-  GITHUB_TOKEN: { "description": 'TODO', required: true }
-  repository: { "description": 'The GitHub repository in the form owner/repo defaults to GITHUB_REPOSITORY', required: false }
-  authorName: { "description": 'TODO', required: false }
-  authorEmail: { "description": 'TODO', required: false }
-  updateScript: { "description": 'TODO', required: true }
-  applyUpdateScript: { "description": 'TODO', required: false }
-  branchName: { "description": 'TODO', required: false }
-  baseBranch: { "description": 'TODO', required: false }
-  commitMessage: { "description": 'TODO', required: false }
-  prTitle: { "description": 'TODO', required: false }
-  prBody: { "description": 'TODO', required: false }
+  GITHUB_TOKEN: { "description": 'Github API token (typically settings.GITHUB_TOKEN)', required: true }
+  repository: { "description": 'The GitHub repository in the form owner/repo (defaults to GITHUB_REPOSITORY)', required: false }
+  authorName: { "description": 'Author name (defaults to github actions bot)', required: false }
+  authorEmail: { "description": 'Author email (defaults to github actions bot)', required: false }
+  setupScript: { "description": "Script to prepare the update (changes from this script will not count)", required: true }
+  updateScript: { "description": "Script to perform update", required: true }
+  branchName: { "description": 'Branch name to use for PRs, will be force-pushed. Default `self-update`', required: false }
+  baseBranch: { "description": 'Base branch for PR (default: checked out branch)', required: false }
+  commitMessage: { "description": 'Commit message', required: false }
+  prTitle: { "description": 'PR title', required: false }
+  prBody: { "description": 'PR body', required: false }
 
 outputs:
   pr_number:
