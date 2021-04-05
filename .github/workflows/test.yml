@@ -12,22 +12,20 @@ jobs:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date
         commitMessage: "Just adding the date..."
-        prTitle: "[test] applyUpdate"
+        prTitle: "[test] update"
         prBody: "This is a test PR"
         updateScript: |-
           echo "Today is $(date)" > current-date
-          git add --intent-to-add current-date
 
     - uses: timbertson/self-update-action@wip
       with:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         branchName: test-add-date-2
-        prTitle: "[test] applyUpdateScript"
+        prTitle: "[test] setup + update"
         prBody: "This is a test PR"
-        updateScript: |-
+        setupScript: |-
           echo "Today is $(date)" > current-date
-          git add --intent-to-add current-date
-        applyUpdateScript: |-
+        updateScript: |-
           sed -i -e 's/is .*/is [censored]/' current-date
 
     - uses: timbertson/self-update-action@wip
@@ -35,10 +33,10 @@ jobs:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         prTitle: "[test] unchanged"
         branchName: test-unchanged-apply
-        updateScript: |-
+        setupScript: |-
           echo "Today is $(date)" > current-date
           git add --intent-to-add current-date
-        applyUpdateScript: |-
+        updateScript: |-
           true
 
     - uses: timbertson/self-update-action@wip
