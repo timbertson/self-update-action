@@ -126,7 +126,7 @@ function update(state, settings) {
 }
 function detectChanges(state, _settings) {
     try {
-        cmd(state, ["git", "diff-files", "--name-status", "--exit-code"]);
+        cmd(state, ["git", "diff", "--name-status", "--exit-code"]);
         return Object.assign(Object.assign({}, state), { hasChanges: false });
     }
     catch (e) {
