@@ -161,7 +161,7 @@ function update(state: State, settings: Settings): State {
 
 function detectChanges(state: State, _settings: Settings): State {
   try {
-    cmd(state, ["git", "diff-files", "--quiet"])
+    cmd(state, ["git", "diff-files", "--name-status", "--exit-code"])
     return { ...state, hasChanges: false }
   } catch (e) {
     // it failed, presumably because there were differences.
