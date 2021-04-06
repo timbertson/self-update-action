@@ -66,11 +66,6 @@ function main(settings) {
         state = setup(state, settings);
         state = update(state, settings);
         state = detectChanges(state, settings);
-        if (!(state.hasError || state.hasChanges)) {
-            console.log("No changes detected; exiting");
-            return null;
-        }
-        state = pushBranch(state, settings);
         state = yield findPR(state, settings, octokit);
         state = yield updatePR(state, settings, octokit);
         if (state.hasError) {
@@ -186,15 +181,26 @@ function findPR(state, settings, octokit) {
 exports.findPR = findPR;
 function updatePR(state, settings, octokit) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (state.pullRequest == null) {
-            const pullRequest = yield createPR(state, settings, octokit);
-            console.log(`Created PR ${pullRequest.url}`);
-            return Object.assign(Object.assign({}, state), { pullRequest });
+        if (requiresPR(state)) {
+            state = pushBranch(state, settings);
+            if (state.pullRequest == null) {
+                const pullRequest = yield createPR(state, settings, octokit);
+                console.log(`Created PR ${pullRequest.url}`);
+                return Object.assign(Object.assign({}, state), { pullRequest });
+            }
+            else {
+                console.log(`Updating PR ${state.pullRequest.url}`);
+                yield updatePRContents(state.pullRequest, state, settings, octokit);
+                return state;
+            }
         }
         else {
-            console.log(`Updating PR ${state.pullRequest.url}`);
-            yield updatePRContents(state.pullRequest, state, settings, octokit);
-            return state;
+            console.log("No changes detected");
+            if (state.pullRequest != null) {
+                yield closePR(state.pullRequest, octokit);
+                console.log(`Closed PR ${state.pullRequest.url}`);
+            }
+            return Object.assign(Object.assign({}, state), { pullRequest: null });
         }
     });
 }
@@ -268,6 +274,22 @@ function updatePRContents(pullRequest, state, settings, octokit) {
     });
 }
 exports.updatePRContents = updatePRContents;
+function closePR(pullRequest, octokit) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield octokit.graphql(`
+    mutation updatePR($id: String!) {
+      closePullRequest(input: { pullRequestId: $id }) {
+        pullRequest {
+          id
+        }
+      }
+    }
+  `, { id: pullRequest.id });
+    });
+}
+function requiresPR(state) {
+    return state.hasError || state.hasChanges;
+}
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log, settings) {
     // ugh replaceAll should be a thing...

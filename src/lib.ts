@@ -95,12 +95,6 @@ export async function main(settings: Settings): Promise<PullRequest | null> {
   state = setup(state, settings);
   state = update(state, settings);
   state = detectChanges(state, settings);
-  if (!(state.hasError || state.hasChanges)) {
-    console.log("No changes detected; exiting")
-    return null
-  }
-
-  state = pushBranch(state, settings);
 
   state = await findPR(state, settings, octokit);
   state = await updatePR(state, settings, octokit);
@@ -231,14 +225,24 @@ export async function findPR(state: State, settings: Settings, octokit: Octokit)
 }
 
 export async function updatePR(state: State, settings: Settings, octokit: Octokit): Promise<State> {
-  if (state.pullRequest == null) {
-    const pullRequest = await createPR(state, settings, octokit)
-    console.log(`Created PR ${pullRequest.url}`)
-    return { ...state, pullRequest }
+  if (requiresPR(state)) {
+    state = pushBranch(state, settings);
+    if (state.pullRequest == null) {
+      const pullRequest = await createPR(state, settings, octokit)
+      console.log(`Created PR ${pullRequest.url}`)
+      return { ...state, pullRequest }
+    } else {
+      console.log(`Updating PR ${state.pullRequest.url}`)
+      await updatePRContents(state.pullRequest, state, settings, octokit)
+      return state
+    }
   } else {
-    console.log(`Updating PR ${state.pullRequest.url}`)
-    await updatePRContents(state.pullRequest, state, settings, octokit)
-    return state
+    console.log("No changes detected")
+    if (state.pullRequest != null) {
+      await closePR(state.pullRequest, octokit)
+      console.log(`Closed PR ${state.pullRequest.url}`)
+    }
+    return { ...state, pullRequest: null }
   }
 }
 
@@ -309,6 +313,22 @@ export async function updatePRContents(pullRequest: PullRequest, state: State, s
       title: settings.prTitle,
       body: renderPRDescription(state, settings),
     })
+}
+
+async function closePR(pullRequest: PullRequest, octokit: Octokit): Promise<void> {
+  await octokit.graphql(`
+    mutation updatePR($id: String!) {
+      closePullRequest(input: { pullRequestId: $id }) {
+        pullRequest {
+          id
+        }
+      }
+    }
+  `, { id: pullRequest.id })
+}
+
+function requiresPR(state: State) {
+  return state.hasError || state.hasChanges
 }
 
 // Since we're posting command output to github, we need to replicate github's censoring
