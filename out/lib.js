@@ -206,7 +206,7 @@ function createPR(state, settings, octokit) {
       $baseBranch: String!,
       $body: String!,
       $title: String!,
-      $repoId: String!
+      $repoId: ID!
     ) {
       createPullRequest(input: {
         repositoryId: $repoId,
