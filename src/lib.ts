@@ -258,7 +258,7 @@ async function createPR(state: State, settings: Settings, octokit: Octokit): Pro
       $baseBranch: String!,
       $body: String!,
       $title: String!,
-      $repoId: String!
+      $repoId: ID!
     ) {
       createPullRequest(input: {
         repositoryId: $repoId,
