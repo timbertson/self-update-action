@@ -290,7 +290,7 @@ export async function updatePRContents(pullRequest: PullRequest, state: State, s
   const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current'])
   await octokit.graphql(`
     mutation updatePR(
-      $id: String!,
+      $id: ID!,
       $baseBranch: String!,
       $body: String!,
       $title: String!
@@ -317,7 +317,7 @@ export async function updatePRContents(pullRequest: PullRequest, state: State, s
 
 async function closePR(pullRequest: PullRequest, octokit: Octokit): Promise<void> {
   await octokit.graphql(`
-    mutation updatePR($id: String!) {
+    mutation updatePR($id: ID!) {
       closePullRequest(input: { pullRequestId: $id }) {
         pullRequest {
           id

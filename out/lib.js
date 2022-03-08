@@ -249,7 +249,7 @@ function updatePRContents(pullRequest, state, settings, octokit) {
         const baseBranch = settings.baseBranch || cmdSilent(state, ['git', 'branch', '--show-current']);
         yield octokit.graphql(`
     mutation updatePR(
-      $id: String!,
+      $id: ID!,
       $baseBranch: String!,
       $body: String!,
       $title: String!
@@ -277,7 +277,7 @@ exports.updatePRContents = updatePRContents;
 function closePR(pullRequest, octokit) {
     return __awaiter(this, void 0, void 0, function* () {
         yield octokit.graphql(`
-    mutation updatePR($id: String!) {
+    mutation updatePR($id: ID!) {
       closePullRequest(input: { pullRequestId: $id }) {
         pullRequest {
           id
