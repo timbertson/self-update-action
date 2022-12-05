@@ -291,6 +291,15 @@ export async function updatePRDescription(pullRequest: PullRequest, state: State
   })
 }
 
+function abbreviate(message: Array<string>, maxChars: number): string {
+    const joined = message.join("\n");
+    if (joined.length > maxChars) {
+        return "[Too long, message truncated]"
+    } else {
+        return joined
+    }
+}
+
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
   // ugh replaceAll should be a thing...
@@ -318,7 +327,7 @@ function renderPRDescription(state: State, settings: Settings): string {
     "Output for update commit " + commit + ":",
     "",
     "```",
-    censorSecrets(state.log, settings).join("\n"),
+    abbreviate(censorSecrets(state.log, settings), 40000),
     "```",
     `See the [workflow run](${runUrl}) for full details.`,
     "",
