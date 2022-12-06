@@ -64,6 +64,7 @@ jobs:
 
 name: Self-update test
 on:
+  workflow_dispatch:
   push:
     branches:
      - wip
