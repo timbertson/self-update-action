@@ -331,6 +331,15 @@ function requiresPR(state: State) {
   return state.hasError || state.hasChanges
 }
 
+function abbreviate(message: Array<string>, maxChars: number): string {
+    const joined = message.join("\n");
+    if (joined.length > maxChars) {
+        return "[Too long, message truncated]"
+    } else {
+        return joined
+    }
+}
+
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
   // ugh replaceAll should be a thing...
@@ -359,7 +368,7 @@ function renderPRDescription(state: State, settings: Settings): string {
     "<summary>Output for update commit " + commit + ":</summary>",
     "",
     "```",
-    censorSecrets(state.log, settings).join("\n"),
+    abbreviate(censorSecrets(state.log, settings), 40000),
     "```",
     "</details>",
     "",
