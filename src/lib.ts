@@ -26,6 +26,7 @@ type Settings = {
   authorEmail: string,
   prTitle: string,
   prBody: string,
+  prBodyHideOutput: string,
   runId: string,
 }
 
@@ -39,6 +40,7 @@ export const settingKeys = [
   'commitMessage',
   'prTitle',
   'prBody',
+  'prBodyHideOutput',
   'authorName',
   'authorEmail',
 ]
@@ -69,6 +71,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     commitMessage: get('commitMessage', '[bot] self-update'),
     prTitle: get('prTitle', '[bot] self-update'),
     prBody: get('prBody', 'This is an automated PR from a github action'),
+    prBodyHideOutput: get('prBodyHideOutput', 'false'),
     authorName: get('authorName', 'github-actions'),
     authorEmail: get('authorEmail', '41898282+github-actions[bot]@users.noreply.github.com'),
     runId: assertDefined('GITHUB_RUN_ID', process.env['GITHUB_RUN_ID']),
@@ -340,6 +343,22 @@ function abbreviate(message: Array<string>, maxChars: number): string {
     }
 }
 
+function renderOutput(commit: string, settings: Settings, state: State): string {
+  if (settings.prBodyHideOutput == 'true') {
+    return ""
+  } else {
+    return [
+      "<details>",
+      "<summary>Output for update commit " + commit + ":</summary>",
+      "",
+      "```",
+      abbreviate(censorSecrets(state.log, settings), 40000),
+      "```",
+      "</details>"
+    ].join("\n")
+  }
+}
+
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log: Array<string>, settings: Settings): Array<string> {
   // ugh replaceAll should be a thing...
@@ -364,13 +383,7 @@ function renderPRDescription(state: State, settings: Settings): string {
     "",
     "",
     "## " + outputHeader,
-    "<details>",
-    "<summary>Output for update commit " + commit + ":</summary>",
-    "",
-    "```",
-    abbreviate(censorSecrets(state.log, settings), 40000),
-    "```",
-    "</details>",
+    renderOutput(commit, settings, state),
     "",
     `See the [workflow run](${runUrl}) for full details.`,
     "",

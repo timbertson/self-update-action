@@ -26,6 +26,7 @@ exports.settingKeys = [
     'commitMessage',
     'prTitle',
     'prBody',
+    'prBodyHideOutput',
     'authorName',
     'authorEmail',
 ];
@@ -52,6 +53,7 @@ function parseSettings(inputs) {
         commitMessage: get('commitMessage', '[bot] self-update'),
         prTitle: get('prTitle', '[bot] self-update'),
         prBody: get('prBody', 'This is an automated PR from a github action'),
+        prBodyHideOutput: get('prBodyHideOutput', 'false'),
         authorName: get('authorName', 'github-actions'),
         authorEmail: get('authorEmail', '41898282+github-actions[bot]@users.noreply.github.com'),
         runId: assertDefined('GITHUB_RUN_ID', process.env['GITHUB_RUN_ID']),
@@ -290,6 +292,31 @@ function closePR(pullRequest, octokit) {
 function requiresPR(state) {
     return state.hasError || state.hasChanges;
 }
+function abbreviate(message, maxChars) {
+    const joined = message.join("\n");
+    if (joined.length > maxChars) {
+        return "[Too long, message truncated]";
+    }
+    else {
+        return joined;
+    }
+}
+function renderOutput(commit, settings, state) {
+    if (settings.prBodyHideOutput == 'true') {
+        return "";
+    }
+    else {
+        return [
+            "<details>",
+            "<summary>Output for update commit " + commit + ":</summary>",
+            "",
+            "```",
+            abbreviate(censorSecrets(state.log, settings), 40000),
+            "```",
+            "</details>"
+        ].join("\n");
+    }
+}
 // Since we're posting command output to github, we need to replicate github's censoring
 function censorSecrets(log, settings) {
     // ugh replaceAll should be a thing...
@@ -312,13 +339,7 @@ function renderPRDescription(state, settings) {
         "",
         "",
         "## " + outputHeader,
-        "<details>",
-        "<summary>Output for update commit " + commit + ":</summary>",
-        "",
-        "```",
-        censorSecrets(state.log, settings).join("\n"),
-        "```",
-        "</details>",
+        renderOutput(commit, settings, state),
         "",
         `See the [workflow run](${runUrl}) for full details.`,
         "",
