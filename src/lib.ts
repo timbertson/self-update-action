@@ -26,7 +26,7 @@ type Settings = {
   authorEmail: string,
   prTitle: string,
   prBody: string,
-  prBodyHideOutput: boolean,
+  prBodyHideOutput: string,
   runId: string,
 }
 
@@ -71,7 +71,7 @@ export function parseSettings(inputs: Record<string, string>): Settings {
     commitMessage: get('commitMessage', '[bot] self-update'),
     prTitle: get('prTitle', '[bot] self-update'),
     prBody: get('prBody', 'This is an automated PR from a github action'),
-    prBodyHideOutput: get('prBodyHideOutput', false),
+    prBodyHideOutput: get('prBodyHideOutput', 'false'),
     authorName: get('authorName', 'github-actions'),
     authorEmail: get('authorEmail', '41898282+github-actions[bot]@users.noreply.github.com'),
     runId: assertDefined('GITHUB_RUN_ID', process.env['GITHUB_RUN_ID']),
@@ -344,7 +344,7 @@ function abbreviate(message: Array<string>, maxChars: number): string {
 }
 
 function renderOutput(commit: string, settings: Settings, state: State): string {
-  if (settings.prBodyHideOutput) {
+  if (settings.prBodyHideOutput == 'true') {
     return ""
   } else {
     return [
