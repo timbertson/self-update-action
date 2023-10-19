@@ -12,6 +12,7 @@ inputs:
   commitMessage: { "description": 'Commit message', required: false }
   prTitle: { "description": 'PR title', required: false }
   prBody: { "description": 'PR body', required: false }
+  prBodyHideOutput: { "description": "Don't show detailed output in PR body. Default: false", required: false }
 
 outputs:
   pr_number:
